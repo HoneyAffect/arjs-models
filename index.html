@@ -6,15 +6,22 @@
   <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
   <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
   <script>
-    AFRAME.registerComponent('log-animations', {
+    AFRAME.registerComponent('show-animations', {
       init: function () {
         this.el.addEventListener('model-loaded', () => {
           const model = this.el.getObject3D('mesh');
+          let text = 'No animations found';
           if (model.animations && model.animations.length > 0) {
-            console.log('Animations found:', model.animations.map(a => a.name));
-          } else {
-            console.log('No animations found in model');
+            text = 'Animations: ' + model.animations.map(a => a.name).join(', ');
           }
+          // Создаём текстовый элемент на экране
+          const textEntity = document.createElement('a-text');
+          textEntity.setAttribute('value', text);
+          textEntity.setAttribute('position', '0 0 -1');
+          textEntity.setAttribute('align', 'center');
+          textEntity.setAttribute('color', 'red');
+          textEntity.setAttribute('scale', '0.5 0.5 0.5');
+          this.el.sceneEl.appendChild(textEntity);
         });
       }
     });
@@ -28,7 +35,7 @@
         scale="3.3 3.3 3.3"
         position="0 0 0"
         animation-mixer="clip: *; loop: repeat"
-        log-animations>
+        show-animations>
       </a-entity>
     </a-marker>
     <a-entity camera></a-entity>
