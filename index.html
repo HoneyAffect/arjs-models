@@ -1,67 +1,136 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>WebAR Markerless Ghost Monk Demo</title>
+  <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
-  <script src="https://unpkg.com/aframe-extras@7.0.0/dist/aframe-extras.min.js"></script>
-  <script>
-    AFRAME.registerComponent('custom-animation', {
-      init: function () {
-        this.el.addEventListener('model-loaded', () => {
-          const model = this.el.getObject3D('mesh');
-          if (model.animations && model.animations.length > 0) {
-            this.mixer = new THREE.AnimationMixer(model);
-            this.mixer.clipAction(model.animations[0]).play();
-          }
-        });
-      },
-      tick: function (time, delta) {
-        if (this.mixer) {
-          this.mixer.update(delta / 1000);
-        }
-      }
-    });
-    AFRAME.registerComponent('custom-material', {
-      init: function () {
-        this.el.addEventListener('model-loaded', () => {
-          const model = this.el.getObject3D('mesh');
-          model.traverse((node) => {
-            if (node.isMesh) {
-              node.material.opacity = 0.2;
-              node.material.transparent = true;
-              node.material.needsUpdate = true;
-            }
-          });
-        });
-      }
-    });
-    AFRAME.registerComponent('auto-place', {
-      init: function () {
-        this.el.setAttribute('ar-hit-test', 'enabled: true');
-        this.el.setAttribute('visible', true);
-      }
-    });
-  </script>
+  <title>Призрак</title>
+  <style>
+    body { margin: 0; height: 100vh; display: flex; justify-content: center; align-items: center; background: #f0f0f0; }
+    model-viewer { width: 100%; height: 100%; background: transparent; display: none; }
+    .loading-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: white; display: flex; justify-content: center; align-items: center; z-index: 10; }
+    .ar-button { padding: 15px 30px; background: #6200ea; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 18px; }
+    .ar-button:hover { background: #3700b3; }
+    .error-message { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: #ff4444; color: white; padding: 10px; border-radius: 5px; z-index: 20; display: none; }
+  </style>
 </head>
 <body>
-  <a-scene
-    webxr="requiredFeatures: hit-test,local-floor;"
-    renderer="antialias: true;"
-    embedded>
-    <a-assets>
-      <a-asset-item id="ghost-glb" src="https://raw.githubusercontent.com/HoneyAffect/arjs-models/main/ghost.glb"></a-asset-item>
-    </a-assets>
-    <a-entity
-      id="ghost-model"
-      gltf-model="#ghost-glb"
-      scale="2 2 2"
-      position="0 0 0"
-      custom-animation
-      custom-material
-      auto-place>
-    </a-entity>
-    <a-camera position="0 1.6 0"></a-camera>
-  </a-scene>
+  <!-- Import model-viewer and polyfills -->
+  <script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/4.0.0/model-viewer.min.js"></script>
+  <script nomodule src="https://unpkg.com/@google/model-viewer/dist/model-viewer-legacy.js"></script>
+  <script src="https://unpkg.com/@webcomponents/webcomponentsjs@2.8.0/webcomponents-loader.js"></script>
+  <script src="https://unpkg.com/intersection-observer@0.12.2/intersection-observer.js"></script>
+  <script src="https://unpkg.com/resize-observer-polyfill@1.5.1/dist/ResizeObserver.js"></script>
+  <script src="https://unpkg.com/fullscreen-polyfill@0.2.0/dist/fullscreen.polyfill.js"></script>
+
+  <!-- Loading overlay -->
+  <div class="loading-overlay" id="loadingOverlay">
+    <button class="ar-button" onclick="startAR()">👋 Вы готовы?</button>
+  </div>
+
+  <!-- Error message -->
+  <div class="error-message" id="errorMessage"></div>
+
+  <!-- Model viewer with AR support -->
+  <model-viewer
+    id="ghostModel"
+    alt="Animated Ghost Model"
+    src="https://raw.githubusercontent.com/HoneyAffect/arjs-models/main/ghost-move.glb"
+    ios-src="https://raw.githubusercontent.com/HoneyAffect/arjs-models/main/ghost-ios-check.usdz"
+    ar
+    ar-modes="webxr scene-viewer quick-look"
+    ar-placement="floor"
+    ar-scale="fixed"
+    camera-controls
+    touch-action="pan-y"
+    auto-play
+  ></model-viewer>
+
+  <script>
+    const modelViewer = document.querySelector('model-viewer#ghostModel');
+    const loadingOverlay = document.querySelector('#loadingOverlay');
+    const errorMessage = document.querySelector('#errorMessage');
+
+    // Определяем, что это iOS
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+
+    // Preload model and adjust for iOS
+    modelViewer.addEventListener('load', () => {
+      modelViewer.style.display = 'block';
+      loadingOverlay.style.display = 'none';
+      console.log('Модель загружена успешно');
+
+      if (isIOS) {
+        // Устанавливаем масштаб для iOS
+        modelViewer.model.scale.set(5, 5, 5); // Увеличиваем в 5 раз
+        // Ориентация предполагается корректной в новом .usdz
+        // Если всё ещё лежит, раскомментируйте:
+        // modelViewer.model.rotation.set(Math.PI / 2, 0, 0); // 90 градусов по X
+        console.log('Масштаб скорректирован на iOS:', {
+          scale: modelViewer.model.scale,
+          rotation: {
+            x: modelViewer.model.rotation.x,
+            y: modelViewer.model.rotation.y,
+            z: modelViewer.model.rotation.z
+          }
+        });
+      }
+    });
+
+    // Apply transparency and preserve textures
+    modelViewer.addEventListener('model-loaded', () => {
+      const scene = modelViewer.scene;
+      scene.traverse((node) => {
+        if (node.isMesh) {
+          node.material.opacity = 0.4;
+          node.material.transparent = true;
+          node.material.needsUpdate = true;
+
+          // Log texture info
+          const texture = node.material.map;
+          console.log(`Mesh ${node.name}:`, {
+            hasTexture: !!texture,
+            textureSource: texture ? texture.image.src : 'No texture'
+          });
+        }
+      });
+      console.log('Прозрачность и текстуры применены');
+    });
+
+    // Handle errors
+    modelViewer.addEventListener('error', (event) => {
+      errorMessage.textContent = 'Проверьте подключение к сети или формат файла';
+      errorMessage.style.display = 'block';
+      loadingOverlay.style.display = 'none';
+      console.error('Ошибка загрузки модели:', event);
+    });
+
+    // Fix model position in AR
+    modelViewer.addEventListener('ar-status', (event) => {
+      if (event.detail.status === 'session-started') {
+        modelViewer.interactionPrompt = 'none';
+        modelViewer.scene.addEventListener('before-render', () => {
+          modelViewer.model.position.set(0, 0, 0);
+        });
+        modelViewer.style.display = 'block';
+        if (modelViewer.availableAnimations && modelViewer.availableAnimations.length > 0) {
+          modelViewer.play();
+          console.log('Анимации запущены в AR:', modelViewer.availableAnimations);
+        } else {
+          console.log('Анимации отсутствуют в модели');
+        }
+      } else if (event.detail.status === 'failed') {
+        errorMessage.textContent = 'Не удалось запустить AR. Проверьте камеру или устройство.';
+        errorMessage.style.display = 'block';
+        modelViewer.style.display = 'block';
+        loadingOverlay.style.display = 'none';
+      }
+    });
+
+    // Start AR
+    function startAR() {
+      modelViewer.activateAR();
+      loadingOverlay.style.display = 'none';
+    }
+  </script>
 </body>
 </html>
